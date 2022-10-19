@@ -2,7 +2,7 @@
 
 ### Local installation of this project
 
-1.  `php >= 7.4 ` 
+1.  `php >= 8 ` 
 2. run `symfony.exe`
 
 ### Local installation of this project
