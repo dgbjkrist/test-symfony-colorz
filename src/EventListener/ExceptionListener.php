@@ -13,7 +13,7 @@ class ExceptionListener
     {
         $exception = $event->getThrowable();
         $message = sprintf(
-            'Le message d\'erreur indique: %s avec un code: %s',
+            'Erreur : %s avec un code: %s',
             $exception->getMessage(),
             $exception->getCode()
         );

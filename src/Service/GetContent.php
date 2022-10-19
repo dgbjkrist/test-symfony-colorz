@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Exception\BadRequestException;
+use App\Exception\InvalidArgumentException;
 use App\Exception\UnexpectedException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
@@ -13,21 +14,15 @@ class GetContent
     public function getTeams(UploadedFile $uploadedFile) {
 
         if ($uploadedFile->getClientMimeType() !== self::TYPE_AUTHORIZED) {
-            throw new BadRequestException(\sprintf('Le fichier soumis doit etre de type json'));
+            throw new InvalidArgumentException(\sprintf('Le fichier soumis doit etre de type json'));
         }
         
         $content = file_get_contents($uploadedFile);
 
         if($content == false) {
-            throw new UnexpectedException("Error Processing Request");
+            throw new UnexpectedException("Error Processing Request : ".__METHOD__);
         }
 
-        $datas = json_decode($content, true);
-
-        if (!array_key_exists("teams", $datas)) {
-            throw new BadRequestException("La clé Teams n'existe pas");
-        }
-
-        return $datas;
+        return json_decode($content, true);
     }
 }

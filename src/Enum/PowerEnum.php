@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Enum;
+use App\Exception\InvalidArgumentException;
 
 class PowerEnum
 {
@@ -56,11 +57,10 @@ class PowerEnum
 
     public function getPowerCode(string $powerName) {
         
-        if(\in_array($powerName, self::POWER_NAME) === true) {
-            $powerCode = array_flip(self::POWER_NAME);
-            return $powerCode[$powerName];
+        $powerCode = array_search($powerName, self::POWER_NAME);
+        if($powerCode === false) {
+            throw new InvalidArgumentException(\sprintf('%s is not a power name valid', $powerName));
         }
-
-        return null;
+        return $powerCode;
     }
 }

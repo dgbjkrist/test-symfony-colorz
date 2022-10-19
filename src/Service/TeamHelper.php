@@ -2,13 +2,19 @@
 
 namespace App\Service;
 use App\Enum\PowerEnum;
+use App\Exception\InvalidArgumentException;
+use App\Exception\UnexpectedException;
 
 class TeamHelper
 {
-    private $header = ['Squad Name', 'Home Town', 'Formed Year', 'Base', 'Number of members', 'Average Age', 'Average strengh of team', 'Is Active'];
+    private const TEAMS_HEADER = ['Squad Name', 'Home Town', 'Formed Year', 'Base', 'Number of members', 'Average Age', 'Average strengh of team', 'Is Active'];
 
-    private $headerMembers = ['Squad Name', 'Name', 'Secret ID', 'Age', 'Number of Power', 'Average strengh of team'];
+    private const MEMBERS_INCOMPLETE_HEADER = ['Squad Name', 'Home Town', 'Name', 'Secret ID', 'Age', 'Number of Power'];
     
+    private const TEAM_FILE = "teams.csv";
+
+    private const MEMBERS_FILE = "team_members.csv";
+
     private $fileUploader;
     private $powerEnum;
 
@@ -16,15 +22,23 @@ class TeamHelper
         $this->fileUploader = $fileUploader;
         $this->powerEnum = $powerEnum;
     }
+
+    
     public function buildTeams(array $datas)
     {
-        $fp = fopen($this->fileUploader->getTargetDirectory().'teams.csv', 'w');
-        fputcsv($fp, $this->getTeamsHeader());
+        $this->keyExists('teams', $datas);
 
+        $teamsReconstitutedForCSV = [];
+        $membersReconstitutedForCSV = [];
+
+        $highestPower = 0;
+        
         foreach($datas["teams"] as $team) {
+            $this->keyExists(['members', 'squadName', 'homeTown', 'formed', 'secretBase', 'active'], $team);
+            
             $members = $team['members'];
             $numberMembers = count($team['members']);
-            $row = [
+            $teamReconstitutedForCSV = [
                 $team['squadName'],
                 $team['homeTown'],
                 $team['formed'],
@@ -35,30 +49,17 @@ class TeamHelper
                 $team['active']
             ];
 
-            fputcsv($fp, $row);
-        }
-        
-        return $fp;
-    }
-
-    public function buildMembersTeams(array $datas)
-    {
-        $membersFile = fopen($this->fileUploader->getTargetDirectory().'team_members.csv', 'w');
-        // fputcsv($membersFile, $this->getTeamsMembersHeader());
-
-        $members = [];
-        $highestPower = 0;
-
-        foreach($datas["teams"] as $team) {
             foreach($team['members'] as $member) {
+                $this->keyExists(['name', 'secretIdentity', 'age', 'powers'], $member);
                 
-                $arrayPowers = [];
+                $powersMemberReconstitutedForCSV = [];
+
                 if(is_array($member['powers'])) {
-                    $arrayPowers = $this->getPowers($member);
+                    $powersMemberReconstitutedForCSV = $this->getPowersCodes($member);
                 }
                 
-                $numberOfPower = count($arrayPowers);
-                $member = [
+                $numberOfPower = count($powersMemberReconstitutedForCSV);
+                $infosMemberReconstitutedForCSV = [
                     $team['squadName'],
                     $team['homeTown'],
                     $member['name'],
@@ -66,28 +67,58 @@ class TeamHelper
                     $member['age'],
                     $numberOfPower
                 ];
-                $member = array_merge($member, $arrayPowers);
-                $members[] = $member;
+
+                $membersReconstitutedForCSV[] = array_merge($infosMemberReconstitutedForCSV, $powersMemberReconstitutedForCSV);
 
                 $highestPower = max($highestPower, $numberOfPower);
             }
+
+            $teamsReconstitutedForCSV[] = $teamReconstitutedForCSV;
         }
 
         $headerOfPower = $this->getHeaderOfPower($highestPower);
 
-        $membersFileHeader = array_merge($this->getTeamsMembersHeader(), $headerOfPower);
+        $membersFileHeader = array_merge(self::MEMBERS_INCOMPLETE_HEADER, $headerOfPower);
+        
+        $this->buildFileCSV(self::TEAM_FILE, self::TEAMS_HEADER, $teamsReconstitutedForCSV);
+        $this->buildFileCSV(self::MEMBERS_FILE, $membersFileHeader, $membersReconstitutedForCSV);
+    }
 
-        // array_push($headerOfPower, $membersFileHeader);
-        // $members[] = $membersFileHeader;
+    public function buildFileCSV(string $fileName, array $fileCSVHeader, array $datas)
+    {
+        try {
+            $fileCSV = $this->fileUploader->upload($fileName);
 
-        // dd($headerOfPower)
-        array_unshift($members, $membersFileHeader);
+            if (!fputcsv($fileCSV, $fileCSVHeader)) {
+                throw new UnexpectedException("Error Processing Request : ".__METHOD__);
+            }
+        
+            foreach ($datas as $data) {
+                if (!fputcsv($fileCSV, $data)) {
+                    throw new UnexpectedException("Error Processing Request : ".__METHOD__);
+                }
+            }
 
-        foreach ($members as $member) {
-            fputcsv($membersFile, $member);
+            fclose($fileCSV);
+
+        } catch (\Throwable $th) {
+            throw new UnexpectedException($th->getMessage());
         }
+    }
 
-        fclose($membersFile);
+    public function keyExists($needle, array $haystack)
+    {
+        if (\is_array($needle)) {
+            foreach ($needle as $value) {
+                if (false === array_key_exists($value, $haystack)) {
+                    throw new InvalidArgumentException(\sprintf('key %s should exist, please check format file', $value));
+                }
+            }
+        } else {
+            if (false === array_key_exists($needle, $haystack)) {
+                throw new InvalidArgumentException(\sprintf('key %s should exist, please check format file', $needle));
+            }
+        }
     }
 
     private function getHeaderOfPower($highestPower) {
@@ -99,7 +130,7 @@ class TeamHelper
         return $headerOfPower;
     }
 
-    private function getPowers($member) {
+    private function getPowersCodes($member) {
         $powerCode = [];
 
         if(is_array($member['powers'])) {
@@ -110,8 +141,6 @@ class TeamHelper
 
         return $powerCode;
     }
-
-    
 
     private function getSumAgesTeam(array $members)
     {
@@ -136,15 +165,5 @@ class TeamHelper
         }
         
         return $sumPowersTeam; 
-    }
-    
-    public function getTeamsHeader()
-    {
-        return $this->header;
-    }
-
-    public function getTeamsMembersHeader()
-    {
-        return $this->headerMembers;
     }
 }
